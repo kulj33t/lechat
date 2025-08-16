@@ -10,6 +10,7 @@ export default {
   plugins: [daisyui],
     daisyui: {
       themes: [
+        "dracula",
         "light",
         "dark",
         "cupcake",
@@ -30,7 +31,6 @@ export default {
         "wireframe",
         "black",
         "luxury",
-        "dracula",
         "cmyk",
         "autumn",
         "business",

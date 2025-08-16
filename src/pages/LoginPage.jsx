@@ -1,33 +1,60 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import toast from "react-hot-toast";
-import { Eye, EyeOff, Loader, Lock, Mail, MessageSquare } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Loader,
+  Lock,
+  Mail,
+  MessageSquare,
+  Check,
+  X,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
 
 const LoginPage = () => {
   const { login, isLoggingIn } = useAuthStore();
   const [showPass, setShowPass] = useState(false);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
+  const [isEmailValid, setIsEmailValid] = useState(false);
+
+  const validateEmail = (email) => {
+    const emailRegex = /\S+@\S+\.\S+/;
+    setIsEmailValid(emailRegex.test(email));
+  };
+
+  useEffect(() => {
+    validateEmail(formData.email);
+  }, [formData.email]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   const validateForm = () => {
     if (!formData.email.trim()) return toast.error("Email is required");
-    if (!/\S+@\S+\.\S+/.test(formData.email))
-      return toast.error("Invalid email format");
-
+    if (!isEmailValid) return toast.error("Invalid email format");
     if (!formData.password) return toast.error("Password is required");
-
     return true;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const validData = validateForm();
-    if (validData === true) login(formData);
+    if (validateForm()) login(formData);
   };
+
+  const isFormValid = isEmailValid && formData.password;
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 mt-16">
@@ -45,6 +72,7 @@ const LoginPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Email</span>
@@ -55,15 +83,31 @@ const LoginPage = () => {
                   </div>
                   <input
                     type="text"
-                    className="input input-bordered w-full pl-10"
+                    name="email"
+                    className={`input w-full pl-10 ${
+                      !isEmailValid && formData.email
+                        ? "border border-error"
+                        : "input-bordered"
+                    }`}
                     placeholder="your@example.com"
                     value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
+                    onChange={handleInputChange}
                   />
+                  {formData.email !== "" && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                      {isEmailValid ? (
+                        <Check className="size-5 text-success" />
+                      ) : (
+                        <X className="size-5 text-error" />
+                      )}
+                    </div>
+                  )}
                 </div>
+                {!isEmailValid && formData.email && (
+                  <p className="text-xs text-error mt-1">Invalid email format</p>
+                )}
               </div>
+
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Password</span>
@@ -74,12 +118,11 @@ const LoginPage = () => {
                   </div>
                   <input
                     type={showPass ? "text" : "password"}
+                    name="password"
                     className="input input-bordered w-full pl-10"
                     placeholder="********"
                     value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
+                    onChange={handleInputChange}
                   />
                   <button
                     type="button"
@@ -94,6 +137,7 @@ const LoginPage = () => {
                   </button>
                 </div>
               </div>
+
               <Link
                 to="/reset-password"
                 className="text-sm text-primary mt-2 block text-left hover:underline"
@@ -104,7 +148,7 @@ const LoginPage = () => {
               <button
                 type="submit"
                 className="btn btn-primary w-full"
-                disabled={isLoggingIn}
+                disabled={isLoggingIn || !isFormValid}
               >
                 {isLoggingIn ? (
                   <>
@@ -128,6 +172,7 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
+
       <AuthImagePattern
         title="Welcome back!"
         subtitle="Log in to continue exploring and sharing with your friends."

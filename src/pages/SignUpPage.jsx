@@ -32,8 +32,18 @@ const useDebounce = (callback, delay) => {
 const SignUpPage = () => {
   const { signup, isSigningUp } = useAuthStore();
   const [showPass, setShowPass] = useState(false);
+
+  // Username validation states
   const [isValidatingUsername, setIsValidatingUsername] = useState(false);
   const [isUsernameValid, setIsUsernameValid] = useState(false);
+
+  // Email validation state (only regex)
+  const [isEmailValid, setIsEmailValid] = useState(false);
+
+  // Password validation state
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
+
+  // Form data
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -41,64 +51,74 @@ const SignUpPage = () => {
     username: "",
   });
 
-  const validateForm = () => {
-    if (!formData.fullName.trim()) {
-      toast.error("Full name is required");
-      return false;
-    }
-    if (!formData.email.trim()) {
-      toast.error("Email is required");
-      return false;
-    }
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      toast.error("Invalid email format");
-      return false;
-    }
-    if (!formData.password) {
-      toast.error("Password is required");
-      return false;
-    }
-    if (!formData.username) {
-      toast.error("User name is required");
-      return false;
-    }
-    if (formData.username.length > 18) {
-      toast.error("User name cannot be greater than 18 characters");
-      return false;
-    }
-    if (formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return false;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      toast.error("User name contains invalid characters");
-      return false;
-    }
-    return true;
-  };
-
+  // Username validation (API call debounced)
   const validateUsername = useDebounce(async (username) => {
+    if (!username) {
+      setIsUsernameValid(false);
+      return;
+    }
     try {
       setIsValidatingUsername(true);
       const res = await axiosInstance.get(`/auth/validateUserName/${username}`);
       setIsUsernameValid(res?.data?.status === "success");
-    } catch (error) {
-      toast.error(error?.response?.data?.message);
+    } catch {
       setIsUsernameValid(false);
     } finally {
       setIsValidatingUsername(false);
     }
   }, 1000);
 
+  // Email validation (regex only)
+  const validateEmail = (email) => {
+    const emailRegex = /\S+@\S+\.\S+/;
+    setIsEmailValid(emailRegex.test(email));
+  };
+
+  // Password validation (strong password regex)
+  const validatePassword = (password) => {
+    const isStrong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+{};:,<.>]).{8,}$/.test(password);
+    setIsPasswordValid(isStrong);
+  };
+
+  // Handlers for input changes
   const handleUserNameChange = (username) => {
     setFormData((prev) => ({ ...prev, username }));
     validateUsername(username);
   };
 
+  const handleEmailChange = (email) => {
+    setFormData((prev) => ({ ...prev, email }));
+    validateEmail(email);
+  };
+
+  const handlePasswordChange = (password) => {
+    setFormData((prev) => ({ ...prev, password }));
+    validatePassword(password);
+  };
+
+  // Submit handler
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (validateForm()) signup(formData);
+    if (!formData.fullName.trim()) return toast.error("Full name is required");
+    if (!formData.email.trim()) return toast.error("Email is required");
+    if (!isEmailValid) return toast.error("Invalid email format");
+    if (!formData.username) return toast.error("Username is required");
+    if (!isUsernameValid) return toast.error("Username is not available or invalid");
+    if (!formData.password) return toast.error("Password is required");
+    if (!isPasswordValid)
+      return toast.error(
+        "Password must be 8+ chars and include uppercase, lowercase, number & symbol."
+      );
+
+    signup(formData);
   };
+
+  // Check if form is valid to enable submit button
+  const isFormValid =
+    formData.fullName.trim() &&
+    isUsernameValid &&
+    isEmailValid &&
+    isPasswordValid;
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 mt-16">
@@ -114,7 +134,9 @@ const SignUpPage = () => {
                 Get started with your free account
               </p>
             </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Full Name */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Full Name</span>
@@ -134,6 +156,8 @@ const SignUpPage = () => {
                   />
                 </div>
               </div>
+
+              {/* Username */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Username</span>
@@ -162,6 +186,8 @@ const SignUpPage = () => {
                   )}
                 </div>
               </div>
+
+              {/* Email */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Email</span>
@@ -172,15 +198,31 @@ const SignUpPage = () => {
                   </div>
                   <input
                     type="text"
-                    className="input input-bordered w-full pl-10"
+                    className={`input w-full pl-10 ${
+                      !isEmailValid && formData.email
+                        ? "border border-error"
+                        : "input-bordered"
+                    }`}
                     placeholder="your@example.com"
                     value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
+                    onChange={(e) => handleEmailChange(e.target.value)}
                   />
+                  {formData.email !== "" && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                      {isEmailValid ? (
+                        <Check className="size-5 text-success" />
+                      ) : (
+                        <X className="size-5 text-error" />
+                      )}
+                    </div>
+                  )}
                 </div>
+                {!isEmailValid && formData.email && (
+                  <p className="text-xs text-error mt-1">Invalid email format</p>
+                )}
               </div>
+
+              {/* Password */}
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">Password</span>
@@ -191,17 +233,19 @@ const SignUpPage = () => {
                   </div>
                   <input
                     type={showPass ? "text" : "password"}
-                    className="input input-bordered w-full pl-10"
+                    className={`input w-full pl-10 ${
+                      !isPasswordValid && formData.password
+                        ? "border border-error"
+                        : "input-bordered"
+                    }`}
                     placeholder="********"
                     value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
+                    onChange={(e) => handlePasswordChange(e.target.value)}
                   />
                   <button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    onClick={() => setShowPass(!showPass)}
+                    onClick={() => setShowPass((prev) => !prev)}
                   >
                     {showPass ? (
                       <Eye className="size-5 text-base-content/40" />
@@ -210,13 +254,19 @@ const SignUpPage = () => {
                     )}
                   </button>
                 </div>
+                {!isPasswordValid && formData.password && (
+                  <p className="text-xs text-error mt-1">
+                    Password must be 8+ chars and include uppercase, lowercase,
+                    number & symbol.
+                  </p>
+                )}
               </div>
+
+
               <button
                 type="submit"
                 className="btn btn-primary w-full"
-                disabled={
-                  isSigningUp || isValidatingUsername || !isUsernameValid
-                }
+                disabled={isSigningUp || isValidatingUsername || !isFormValid}
               >
                 {isSigningUp ? (
                   <>
@@ -228,6 +278,7 @@ const SignUpPage = () => {
                 )}
               </button>
             </form>
+
             <div className="text-center mt-2">
               <p className="text-base-content/60">
                 Already have an account?{" "}
@@ -241,7 +292,7 @@ const SignUpPage = () => {
       </div>
       <AuthImagePattern
         title="Join our community"
-        subtitle="Connect with friends, share moments, and stay in touch with your loved ones."
+        subtitle="Connect with friends & share moments with your loved ones."
       />
     </div>
   );
