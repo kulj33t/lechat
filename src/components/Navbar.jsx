@@ -59,7 +59,7 @@ const Navbar = () => {
                     loading="lazy"
                   />
                 </div>
-                <h1 className="text-lg font-bold">Chit-Chat</h1>
+                <h1 className="text-lg font-bold">Le Chat</h1>
               </Link>
             </div>
 
