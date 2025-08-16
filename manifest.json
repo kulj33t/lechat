@@ -1,0 +1,23 @@
+{
+    "name": "Le Chat",
+    "short_name": "Le-Chat",
+    "description": "Chatting app",
+    "icons": [
+      {
+        "src": "/Logo.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "/Icon.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ],
+    "start_url": "/",
+    "background_color": "#445573",
+    "theme_color":"#576275",
+    "display": "standalone",
+    "orientation": "portrait-primary"
+  }
+  
