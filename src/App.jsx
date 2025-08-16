@@ -3,7 +3,6 @@ import { Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import {
   SignUpPage,
-  Settings,
   LoginPage,
   ProfilePage,
   ForgotPass,
@@ -81,7 +80,6 @@ const App = () => {
           path="/login"
           element={!authUser ? <LoginPage /> : <Navigate to="/" />}
         />
-        <Route path="/settings" element={<Settings />} />
         <Route
           path="/profile"
           element={authUser ? <ProfilePage /> : <Navigate to="/login" />}

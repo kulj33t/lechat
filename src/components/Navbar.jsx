@@ -7,10 +7,15 @@ import { useUserStore } from "../store/useUserStore";
 import { useGroupChatStore } from "../store/useGroupChatStore";
 import { useChatStore } from "../store/useChatStore";
 import { useGroupConfigStore } from "../store/useGroupConfigStore";
+import { THEMES } from "../themeConstant";
+import { useThemeStore } from "../store/useThemeStore";
+
 
 const Navbar = () => {
   const { logout, authUser } = useAuthStore();
   const [showLogoutMsg, setShowLogoutMsg] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const { theme, setTheme } = useThemeStore();
   const {
     userRequests,
     groupRequestsUser,
@@ -24,7 +29,8 @@ const Navbar = () => {
     setAllGroupMessages,
     setShowInfo,
   } = useGroupChatStore();
-  const { setSelectedUser, setMessages, setUnreadCount,setAllMessages } = useChatStore();
+  const { setSelectedUser, setMessages, setUnreadCount, setAllMessages } =
+    useChatStore();
 
   useEffect(() => {
     if (authUser) subscribeToUserRequests();
@@ -64,24 +70,13 @@ const Navbar = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
-                to="/settings"
+              <button
+                onClick={() => setIsThemeModalOpen(true)}
                 className="btn btn-sm gap-2 transition-colors"
               >
                 <Settings className="size-4" />
-                <span
-                  className="hidden sm:inline"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setSelectedGroup(null);
-                    setMessages(null);
-                    setShowInfo(false);
-                    setGroupMessages(null);
-                  }}
-                >
-                  Settings
-                </span>
-              </Link>
+                <span className="hidden sm:inline">Theme</span>
+              </button>
 
               {authUser && (
                 <>
@@ -137,6 +132,7 @@ const Navbar = () => {
           </div>
         </div>
       </header>
+
       {showLogoutMsg && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center h-screen z-50">
           <div className="bg-base-100 border border-base-300 rounded-lg shadow-lg w-4/5 sm:w-1/3 p-6 flex flex-col items-center gap-6">
@@ -167,6 +163,52 @@ const Navbar = () => {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isThemeModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-base-100 w-11/12 sm:w-1/2 max-w-md p-6 rounded-lg shadow-xl border border-base-300 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Choose Theme</h2>
+              <button
+                onClick={() => setIsThemeModalOpen(false)}
+                className="btn btn-sm btn-ghost"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {THEMES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setTheme(t);
+                    setIsThemeModalOpen(false);
+                  }}
+                  className={`group flex flex-col items-center gap-1.5 p-2 rounded-lg transition-colors ${
+                    theme === t ? "bg-base-200" : "hover:bg-base-200/50"
+                  }`}
+                >
+                  <div
+                    className="relative h-8 w-full rounded-md overflow-hidden"
+                    data-theme={t}
+                  >
+                    <div className="absolute inset-0 grid grid-cols-4 gap-px p-1">
+                      <div className="rounded bg-primary"></div>
+                      <div className="rounded bg-secondary"></div>
+                      <div className="rounded bg-accent"></div>
+                      <div className="rounded bg-neutral"></div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-medium truncate w-full text-center">
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
