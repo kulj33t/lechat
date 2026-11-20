@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useUserStore } from "../../store/useUserStore";
 import toast from "react-hot-toast";
+import { profileImageProps } from "../../lib/profileImage";
 
 const UserRequests = () => {
   const { userRequests, reviewUserRequest } = useUserStore();
@@ -17,8 +18,8 @@ const UserRequests = () => {
     setCurrReq(req._id);
     setStatus("accepted");
     try {
-      await reviewUserRequest("accepted", req._id);
-      toast.success("Request accepted successfully");
+      const reviewed = await reviewUserRequest("accepted", req._id);
+      if (reviewed) toast.success("Request accepted successfully");
     } catch (error) {
       console.log(error);
     } finally {
@@ -31,8 +32,8 @@ const UserRequests = () => {
     setStatus("rejected");
     setCurrReq(req._id);
     try {
-      await reviewUserRequest("rejected", req._id);
-      toast.success("Request rejected successfully");
+      const reviewed = await reviewUserRequest("rejected", req._id);
+      if (reviewed) toast.success("Request rejected successfully");
     } catch (error) {
       console.log(error);
     } finally {
@@ -50,7 +51,7 @@ const UserRequests = () => {
         >
           <div className="flex items-center gap-4">
             <img
-              src={request.senderId.profilePic}
+              {...profileImageProps(request.senderId.profilePic)}
               alt={request.senderId.fullName}
               loading="lazy"
               className="w-12 h-12 rounded-full object-cover"

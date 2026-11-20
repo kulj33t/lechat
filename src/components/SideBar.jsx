@@ -6,11 +6,14 @@ import { CreateGroup, SideBarSkeleton } from "../components";
 import { ChevronLeft, ChevronRight, Plus, User, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useGroupConfigStore } from "../store/useGroupConfigStore";
+import { profileImageProps } from "../lib/profileImage";
+import { sameId } from "../lib/utils";
 
 const Sidebar = () => {
   const {
     getUsers,
     users,
+    allMessages,
     selectedUser,
     setMessages,
     setSelectedUser,
@@ -28,6 +31,7 @@ const Sidebar = () => {
   const {
     getGroups,
     groups,
+    allGroupMessages,
     selectedGroup,
     setSelectedGroup,
     isGroupsLoading,
@@ -41,12 +45,12 @@ const Sidebar = () => {
   } = useGroupChatStore();
 
   const filterUnreadCount = (id) => {
-    const newCount = unreadCount.filter((count) => count.userId !== id);
+    const newCount = unreadCount.filter((count) => !sameId(count.userId, id));
     setUnreadCount(newCount);
   };
 
   const filterUnreadGroupCount = (id) => {
-    const newCount = unreadGroupCount.filter((count) => count.groupId !== id);
+    const newCount = unreadGroupCount.filter((count) => !sameId(count.groupId, id));
     setUnreadGroupCount(newCount);
   };
 
@@ -64,16 +68,12 @@ const Sidebar = () => {
   }, []);
 
   useEffect(() => {
-    if (users.length > 0) {
-      getUnreadCount(users);
-    }
-  }, [users]);
+    getUnreadCount(users);
+  }, [users, allMessages, getUnreadCount]);
 
   useEffect(() => {
-    if (groups.length > 0) {
-      getUnreadGroupCount(groups);
-    }
-  }, [groups]);
+    getUnreadGroupCount(groups);
+  }, [groups, allGroupMessages, getUnreadGroupCount]);
 
   if (isUsersLoading || isGroupsLoading) return <SideBarSkeleton />;
 
@@ -142,6 +142,7 @@ const Sidebar = () => {
                     setSelectedUser(null);
                     setMessages([]);
                     setShowGroups(true);
+                    setShowInfo(false);
                   }}
                 >
                   <Users className="size-6" />
@@ -200,7 +201,7 @@ const Sidebar = () => {
                           >
                             <div className="relative mx-auto lg:mx-0">
                               <img
-                                src={user.profilePic}
+                                {...profileImageProps(user.profilePic)}
                                 alt={user.fullName}
                                 loading="lazy"
                                 className="size-12 object-cover rounded-full"
@@ -256,7 +257,7 @@ const Sidebar = () => {
                           >
                             <div className="relative mx-auto lg:mx-0">
                               <img
-                                src={user.profilePic}
+                                {...profileImageProps(user.profilePic)}
                                 alt={user.fullName}
                                 loading="lazy"
                                 className="size-12 object-cover rounded-full"
@@ -318,6 +319,7 @@ const Sidebar = () => {
                       key={group._id}
                       onClick={() => {
                         filterUnreadGroupCount(group._id);
+                        setSelectedUser(null);
                         setSelectedGroup(group);
                         updateGroupReadCount(group._id);
                         setConnectionsForGroup([]);
@@ -325,7 +327,7 @@ const Sidebar = () => {
                         setShowInfo(false);
                       }}
                       className={`w-full p-3 flex items-center gap-3 hover:bg-base-300 transition-colors ${
-                        selectedGroup?._id === group._id
+                        sameId(selectedGroup?._id, group._id)
                           ? "bg-base-300 ring-1 ring-base-300"
                           : ""
                       }`}

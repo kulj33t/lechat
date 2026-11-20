@@ -13,7 +13,7 @@ const GroupExplore = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [requestSending, setRequestSending] = useState(null);
   const [isJoiningGroup, setIsJoiningGroup] = useState(null);
-  const [groups, setGroups] = useState([]);
+  const groups = exploreGroups;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,15 +23,11 @@ const GroupExplore = () => {
     fetchData();
   }, [fetchExploreGroups]);
 
-  useEffect(() => {
-    setGroups(exploreGroups);
-  }, [exploreGroups]);
-
   const handleGroupRequest = async (id) => {
     setRequestSending(id);
     try {
-      await sendGroupRequestUser(id);
-      setGroups((prev) => prev.filter((group) => group._id !== id));
+      const result = await sendGroupRequestUser(id);
+      if (!result) return;
       toast.success("Request Sent successfully");
     } catch (error) {
       toast.error(error?.response?.data?.message || "Something went wrong");
@@ -43,8 +39,8 @@ const GroupExplore = () => {
   const handleJoinGroup = async (id) => {
     setIsJoiningGroup(id);
     try {
-      await joinGroup(id);
-      setGroups((prev) => prev.filter((group) => group._id !== id));
+      const result = await joinGroup(id);
+      if (!result) return;
     } catch (error) {
       toast.error("Failed to join group");
     } finally {

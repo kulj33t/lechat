@@ -2,6 +2,7 @@ import { Info, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { useGroupChatStore } from "../store/useGroupChatStore";
+import { profileImageProps } from "../lib/profileImage";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -17,7 +18,7 @@ const ChatHeader = () => {
             <div className="size-10 ml-4 sm:ml-0 rounded-full relative">
               {selectedUser && (
                 <img
-                  src={selectedUser.profilePic}
+                  {...profileImageProps(selectedUser.profilePic)}
                   alt={selectedUser.fullName}
                   loading="lazy"
                 />

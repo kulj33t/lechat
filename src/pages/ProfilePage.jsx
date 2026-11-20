@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import ChangePasswordContainer from "../components/ChangePasswordContainer";
+import { profileImageProps } from "../lib/profileImage";
 
 const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile, updatePrivacy } =
@@ -63,7 +64,7 @@ const ProfilePage = () => {
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <img
-                src={authUser.data.profilePic}
+                {...profileImageProps(authUser.data.profilePic)}
                 alt="Profile"
                 loading="lazy"
                 className="size-32 rounded-full object-cover border-4"

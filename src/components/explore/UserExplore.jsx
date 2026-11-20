@@ -4,6 +4,7 @@ import { useUserStore } from "../../store/useUserStore";
 import toast from "react-hot-toast";
 import { Search } from "lucide-react";
 import SearchUser from "./SearchUser";
+import { profileImageProps } from "../../lib/profileImage";
 
 const UserExplore = () => {
   const {
@@ -16,7 +17,7 @@ const UserExplore = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [requestSending, setRequestSending] = useState(null);
 
-  const [users, setUsers] = useState([]);
+  const users = exploreUsers;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -26,18 +27,14 @@ const UserExplore = () => {
     fetchData();
   }, [fetchExploreUsers]);
 
-  useEffect(() => {
-    setUsers(exploreUsers);
-  }, [exploreUsers]);
-
   const handleConnectionRequest = async (id) => {
     setRequestSending(id);
     try {
-      await sendUserRequest(id);
+      const result = await sendUserRequest(id);
+      if (!result) return;
       toast.success("Request sent successfully");
-      setUsers((prev) => prev.filter((user) => user._id !== id));
     } catch (error) {
-      toast.error(error?.response?.data?.message);
+      toast.error(error?.response?.data?.message || "Unable to send request. Please try again.");
     } finally {
       setRequestSending(null);
     }
@@ -84,7 +81,7 @@ const UserExplore = () => {
           >
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden">
               <img
-                src={user.profilePic}
+                {...profileImageProps(user.profilePic)}
                 alt={user.fullName}
                 loading="lazy"
                 className="object-cover w-full h-full"

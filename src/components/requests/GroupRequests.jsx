@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useUserStore } from "../../store/useUserStore";
+import { profileImageProps } from "../../lib/profileImage";
 
 const GroupRequests = () => {
   const { groupRequestsUser, reviewGroupRequestUser } = useUserStore();
@@ -48,7 +49,7 @@ const GroupRequests = () => {
         >
           <div className="flex items-center gap-4">
             <img
-              src={request.senderId.profilePic}
+              {...profileImageProps(request.senderId.profilePic)}
               alt={request.senderId.fullName}
               loading="lazy"
               className="w-12 h-12 rounded-full object-cover"

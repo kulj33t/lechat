@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { groupRequestAdminStore } from "../../store/useGroupRequestAdminStore";
+import { useGroupChatStore } from "../../store/useGroupChatStore";
 import { UserPlus2, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { profileImageProps } from "../../lib/profileImage";
+import { useAuthStore } from "../../store/useAuthStore";
 
 const GroupRequestsAdmin = () => {
   const {
@@ -9,17 +12,34 @@ const GroupRequestsAdmin = () => {
     adminGroupRequests,
     reviewGroupRequestAdmin,
     isGroupRequestsAdminLoading,
+    getGroupRequestsAdmin,
+    subscribeToAdminGroupRequests,
+    unsubscribeFromAdminGroupRequests,
   } = groupRequestAdminStore();
+  const { selectedGroup } = useGroupChatStore();
+  const { socket } = useAuthStore();
 
   const [currUser, setCurrUser] = useState(null);
   const [currOperation, setCurrOperation] = useState("");
+
+  useEffect(() => {
+    getGroupRequestsAdmin();
+    subscribeToAdminGroupRequests();
+    return unsubscribeFromAdminGroupRequests;
+  }, [
+    selectedGroup?._id,
+    socket,
+    getGroupRequestsAdmin,
+    subscribeToAdminGroupRequests,
+    unsubscribeFromAdminGroupRequests,
+  ]);
 
   const handleAccept = async (id) => {
     setCurrUser(id);
     setCurrOperation("accepted");
     try {
-      await reviewGroupRequestAdmin("accepted", id);
-      toast.success("Request accepted successfully");
+      const reviewed = await reviewGroupRequestAdmin("accepted", id);
+      if (reviewed) toast.success("Request accepted successfully");
     } catch (error) {
       console.log(error);
     } finally {
@@ -32,8 +52,8 @@ const GroupRequestsAdmin = () => {
     setCurrOperation("rejected");
     setCurrUser(id);
     try {
-      await reviewGroupRequestAdmin("rejected", id);
-      toast.success("Request rejected successfully");
+      const reviewed = await reviewGroupRequestAdmin("rejected", id);
+      if (reviewed) toast.success("Request rejected successfully");
     } catch (error) {
       console.log(error);
     } finally {
@@ -65,7 +85,7 @@ const GroupRequestsAdmin = () => {
               >
                 <div className="flex items-center gap-4">
                   <img
-                    src={request.senderId.profilePic}
+                    {...profileImageProps(request.senderId.profilePic)}
                     alt={request.senderId.fullName}
                     loading="lazy"
                     className="w-12 h-12 rounded-full object-cover border border-base-300"
@@ -82,6 +102,7 @@ const GroupRequestsAdmin = () => {
                         : ""
                     }`}
                     onClick={() => handleAccept(request._id)}
+                    disabled={currUser === request._id}
                   >
                     {currUser === request._id &&
                     currOperation === "accepted" ? (
@@ -100,6 +121,7 @@ const GroupRequestsAdmin = () => {
                         : ""
                     }`}
                     onClick={() => handleReject(request._id)}
+                    disabled={currUser === request._id}
                   >
                     {currUser === request._id && currOperation === "rejected"
                       ? ""

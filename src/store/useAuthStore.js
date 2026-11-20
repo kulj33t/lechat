@@ -1,9 +1,7 @@
 import { create } from "zustand";
-import { axiosInstance } from "../lib/axios";
+import { axiosInstance, SOCKET_BASE_URL } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
-
-const BASE_URL = "https://lechat-backend.onrender.com";
 
 const getUserFacingError = (error, fallback) => {
   const status = error?.response?.status;
@@ -27,6 +25,7 @@ export const useAuthStore = create((set, get) => ({
   isSendingMail: false,
   onlineUsers: [],
   socket: null,
+  isSocketConnecting: false,
 
   checkAuth: async () => {
     set({ isCheckingAuth: true, authCheckError: null });
@@ -38,6 +37,7 @@ export const useAuthStore = create((set, get) => ({
       const status = error?.response?.status;
       if (status === 401 || status === 404) {
         set({ authUser: null, authCheckError: null });
+        get().disconnectSocket();
       } else {
         set({
           authCheckError: "Unable to verify your session. Check your connection and try again.",
@@ -171,23 +171,34 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  connectSocket: () => {
-    const { authUser } = get();
-    if (!authUser || get().socket?.connected) return;
-    const socket = io(BASE_URL, {
-      query: {
-        userId: authUser.data._id,
-      },
-    });
-    socket.connect();
-    set({ socket: socket });
-    socket.on("getOnlineUsers", (userIds) => {
-      set({ onlineUsers: userIds });
-    });
+  connectSocket: async () => {
+    const { authUser, socket, isSocketConnecting } = get();
+    if (!authUser || socket || isSocketConnecting) return;
+    set({ isSocketConnecting: true });
+    try {
+      const response = await axiosInstance.get("/auth/socket-token");
+      if (!get().authUser) return;
+      const nextSocket = io(SOCKET_BASE_URL, {
+        auth: { token: response.data.token },
+        withCredentials: true,
+      });
+      nextSocket.on("getOnlineUsers", (userIds) => {
+        set({ onlineUsers: userIds });
+      });
+      nextSocket.on("connect_error", () => {
+        set({ onlineUsers: [] });
+      });
+      set({ socket: nextSocket });
+    } catch {
+      set({ onlineUsers: [] });
+    } finally {
+      set({ isSocketConnecting: false });
+    }
   },
 
   disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+    get().socket?.disconnect();
+    set({ socket: null, onlineUsers: [], isSocketConnecting: false });
   },
 
 }));

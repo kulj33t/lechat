@@ -15,6 +15,9 @@ import { useGroupConfigStore } from "../store/useGroupConfigStore";
 import { AddMembers, GroupRequestsAdmin } from "../components";
 import { groupRequestAdminStore } from "../store/useGroupRequestAdminStore";
 import { useGroupChatStore } from "../store/useGroupChatStore";
+import { profileImageProps } from "../lib/profileImage";
+import { sameId } from "../lib/utils";
+import toast from "react-hot-toast";
 
 const GroupInfo = () => {
   const {
@@ -36,26 +39,20 @@ const GroupInfo = () => {
     isExitingGroup,
   } = useGroupConfigStore();
 
-  const { groups, selectedGroup } = useGroupChatStore();
-  const [group, setGroup] = useState(selectedGroup);
-
-  const admin = selectedGroup.admin;
+  const { selectedGroup } = useGroupChatStore();
+  const group = selectedGroup;
+  const admin = group.members?.find((member) => sameId(member._id, group.admin));
 
   const [showDeleteWarning, setShowDeleteWarning] = useState(false);
-
-  useEffect(() => {
-    setGroup(selectedGroup);
-    getGroupRequestsAdmin();
-  }, [groups, selectedGroup]);
 
   const { authUser } = useAuthStore();
 
   const [showAdminOptions, setShowAdminOptions] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState({
-    newName: group.name,
-    visibility: group.visibility,
-    description: group.description || "",
+    newName: group?.name || "",
+    visibility: group?.visibility || "public",
+    description: group?.description || "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -66,32 +63,69 @@ const GroupInfo = () => {
     formData?.visibility !== group.visibility ||
     (formData?.description?.trim() || "") !== (group.description?.trim() || "");
 
+  const isValidGroupForm =
+    formData.newName.trim().length > 0 &&
+    formData.newName.trim().length <= 15 &&
+    formData.description.length <= 200;
+  const isAdmin = sameId(authUser.data._id, group.admin);
+
+  useEffect(() => {
+    if (!group) return;
+    if (!isUpdating) {
+      setFormData({
+        newName: group.name,
+        visibility: group.visibility,
+        description: group.description || "",
+      });
+    }
+    getGroupRequestsAdmin();
+  }, [
+    group?._id,
+    group?.name,
+    group?.visibility,
+    group?.description,
+    isUpdating,
+    getGroupRequestsAdmin,
+  ]);
+
   const handleImageUpload = async (e) => {
     setImageUploading(true);
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) {
+      setImageUploading(false);
+      return;
+    }
 
-    const compressedFile = await imageCompression(file, {
-      maxSizeMB: 2,
-      maxWidthOrHeight: 1920,
-      initialQuality: 0.9,
-      useWebWorker: true,
-    });
-
-    const reader = new FileReader();
-    reader.readAsDataURL(compressedFile);
-
-    reader.onload = async () => {
-      const base64Image = reader.result;
+    try {
+      const compressedFile = await imageCompression(file, {
+        maxSizeMB: 2,
+        maxWidthOrHeight: 1920,
+        initialQuality: 0.9,
+        useWebWorker: true,
+      });
+      const base64Image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read this image"));
+        reader.readAsDataURL(compressedFile);
+      });
       await updateGroupDp(base64Image);
-    };
-    setImageUploading(false);
+    } catch {
+      toast.error("Unable to upload this group image. Please try again.");
+    } finally {
+      setImageUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleGroupInfoUpdate = async () => {
     setIsLoading(true);
-    await updateGroup(formData);
-    setIsLoading(false);
+    try {
+      const updated = await updateGroup(formData);
+      if (updated) setIsUpdating(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVisibilityToggle = () => {
@@ -201,7 +235,7 @@ const GroupInfo = () => {
                 className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4"
               />
 
-              {authUser.data._id === group.admin && (
+              {isAdmin && (
                 <label
                   htmlFor="group-image-upload"
                   className="absolute -bottom-1 -right-1 bg-base-content hover:scale-110 p-2 rounded-full cursor-pointer transition-transform duration-300"
@@ -217,14 +251,14 @@ const GroupInfo = () => {
                 </label>
               )}
             </div>
-            {authUser.data._id !== group.admin && (
+            {!isAdmin && (
               <span className="text-sm">
-                Create by {admin.fullName} at{" "}
+                Create by {admin?.fullName || "Group admin"} at{" "}
                 {new Date(group.createdAt).toISOString().split("T")[0]}
               </span>
             )}
 
-            {authUser.data._id === group.admin && (
+            {isAdmin && (
               <p className="text-sm text-center">
                 {imageUploading
                   ? "Uploading..."
@@ -233,7 +267,7 @@ const GroupInfo = () => {
             )}
           </div>
 
-          {authUser.data._id === group.admin && (
+          {isAdmin && (
             <div className="space-y-6">
               <div className="flex flex-wrap justify-center gap-2 sm:gap-6 items-center">
                 <button
@@ -287,6 +321,7 @@ const GroupInfo = () => {
                     }
                     className="input input-bordered w-full"
                     placeholder="Group Name"
+                    maxLength={15}
                   />
                   <input
                     type="text"
@@ -296,6 +331,7 @@ const GroupInfo = () => {
                     }
                     className="input input-bordered w-full"
                     placeholder="Group Description"
+                    maxLength={200}
                   />
                   <div className="flex flex-row items-center bg-base-100 btn no-animation justify-between mt-4">
                     <div className="flex gap-2 items-center">
@@ -329,7 +365,7 @@ const GroupInfo = () => {
                     </button>
                     <button
                       onClick={handleGroupInfoUpdate}
-                      disabled={!validateSave}
+                      disabled={!validateSave || !isValidGroupForm || isLoading}
                       className={`btn btn-primary ${
                         isLoading ? "loading bg-primary" : ""
                       }`}
@@ -341,7 +377,7 @@ const GroupInfo = () => {
               )}
             </div>
           )}
-          {authUser.data._id !== group.admin &&
+          {!isAdmin &&
             group.visibility === "public" && (
               <div className="space-y-2r">
                 <div className="flex justify-center gap-4 items-center">
@@ -367,7 +403,7 @@ const GroupInfo = () => {
               </div>
             )}
 
-          {authUser.data._id !== group.admin &&
+          {!isAdmin &&
             group.visibility === "private" && (
               <div className="flex items-center justify-center">
                 <button
@@ -394,7 +430,7 @@ const GroupInfo = () => {
                 >
                   <div className="flex items-center gap-4">
                     <img
-                      src={member.profilePic}
+                      {...profileImageProps(member.profilePic)}
                       alt={member.fullName}
                       loading="lazy"
                       className="w-10 h-10 object-cover rounded-full"
@@ -403,8 +439,8 @@ const GroupInfo = () => {
                       {member.fullName}
                     </span>
                   </div>
-                  {authUser.data._id === group.admin &&
-                    member._id !== group.admin && (
+                  {isAdmin &&
+                    !sameId(member._id, group.admin) && (
                       <div className="flex relative">
                         {showAdminOptions === member._id && (
                           <button
@@ -435,8 +471,8 @@ const GroupInfo = () => {
                       </div>
                     )}
 
-                  {authUser.data._id !== group.admin &&
-                    member._id === group.admin && (
+                  {!isAdmin &&
+                    sameId(member._id, group.admin) && (
                       <span className="text-sm text-primary/90">Admin</span>
                     )}
                 </div>

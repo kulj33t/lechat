@@ -3,9 +3,10 @@ import { useChatStore } from "../store/useChatStore";
 import { Trash2 } from "lucide-react";
 import { useUserStore } from "../store/useUserStore";
 import toast from "react-hot-toast";
+import { profileImageProps } from "../lib/profileImage";
 
 const Connections = () => {
-  const { users, setUsers } = useChatStore();
+  const { users } = useChatStore();
   const { removeConnections } = useUserStore();
   const [removing, setRemoving] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
@@ -15,9 +16,9 @@ const Connections = () => {
     setRemoving(id);
     setLoading(true);
     try {
-      await removeConnections(id);
+      const removed = await removeConnections(id);
+      if (!removed) return;
       toast.success("Connection removed successfully");
-      setUsers(users.filter((user) => user._id !== id));
     } catch (error) {
       toast.error("Failed to remove connection");
       console.error(error);
@@ -48,7 +49,7 @@ const Connections = () => {
         >
           <div className="flex items-center">
             <img
-              src={user.profilePic}
+              {...profileImageProps(user.profilePic)}
               alt={user.fullName}
               loading="lazy"
               className="w-12 h-12 rounded-full object-cover mr-4"

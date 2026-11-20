@@ -3,6 +3,7 @@ import { useGroupConfigStore } from "../../store/useGroupConfigStore";
 import { useChatStore } from "../../store/useChatStore";
 import { UserPlus2, Lock, X } from "lucide-react";
 import { groupRequestAdminStore } from "../../store/useGroupRequestAdminStore";
+import { profileImageProps } from "../../lib/profileImage";
 
 const AddMembers = () => {
   const {
@@ -73,7 +74,7 @@ const AddMembers = () => {
                 >
                   <div className="flex items-center gap-4">
                     <img
-                      src={connection.profilePic}
+                      {...profileImageProps(connection.profilePic)}
                       alt={connection.fullName}
                       loading="lazy"
                       className="w-12 h-12 rounded-full object-cover"

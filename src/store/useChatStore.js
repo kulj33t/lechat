@@ -3,6 +3,7 @@ import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { useAuthStore } from "./useAuthStore";
 import IncomingSound from "../assets/Incoming.mp3";
+import { sameId } from "../lib/utils";
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -36,11 +37,16 @@ export const useChatStore = create((set, get) => ({
       const { allMessages } = get();
       const { authUser } = useAuthStore.getState();
 
+      if (!authUser?.data?._id || !Array.isArray(users)) {
+        set({ unreadCount: [] });
+        return;
+      }
+
       users.forEach((user) => {
         const count = allMessages.filter(
           (message) =>
-            message.senderId === user._id &&
-            message.receiverId === authUser.data._id &&
+            sameId(message.senderId, user._id) &&
+            sameId(message.receiverId, authUser.data._id) &&
             !message.isRead
         ).length;
         if (count > 0) {
@@ -57,22 +63,48 @@ export const useChatStore = create((set, get) => ({
   updateReadCount: async (userId) => {
     try {
       await axiosInstance.put("/messages/updateRead", { userId });
+      const { authUser } = useAuthStore.getState();
+      set((state) => {
+        const markRead = (message) =>
+          sameId(message.senderId, userId) &&
+          sameId(message.receiverId, authUser?.data?._id)
+            ? { ...message, isRead: true }
+            : message;
+        return {
+          allMessages: state.allMessages.map(markRead),
+          messages: state.messages.map(markRead),
+          unreadCount: state.unreadCount.filter(
+            (count) => !sameId(count.userId, userId)
+          ),
+        };
+      });
+      return true;
     } catch (error) {
       console.log(error);
+      return false;
     }
   },
 
   getAllMessages: async () => {
     try {
       const res = await axiosInstance.get("/messages/getAllMessages");
-      set({ allMessages: res?.data?.data || [] });
+      get().setAllMessages(res?.data?.data || []);
     } catch {
-      set({ allMessages: [] });
+      get().setAllMessages([]);
     }
   },
 
   setAllMessages: (data) => {
-    set({ allMessages: data });
+    set((state) => ({
+      allMessages: data,
+      messages: state.selectedUser
+        ? data.filter(
+            (message) =>
+              sameId(message.senderId, state.selectedUser._id) ||
+              sameId(message.receiverId, state.selectedUser._id)
+          )
+        : state.messages,
+    }));
   },
 
   setUnreadCount: (data) => {
@@ -85,7 +117,8 @@ export const useChatStore = create((set, get) => ({
     try {
       const filteredMessages = allMessages.filter(
         (message) =>
-          message.senderId === userId || message.receiverId === userId
+          sameId(message.senderId, userId) ||
+          sameId(message.receiverId, userId)
       );
       set({ messages: filteredMessages });
     } catch {
@@ -100,73 +133,122 @@ export const useChatStore = create((set, get) => ({
   },
 
   setMessages: (data) => {
-    set({ messages: data });
+    set({ messages: Array.isArray(data) ? data : [] });
   },
 
   subscribeToMessages: () => {
     const socket = useAuthStore.getState().socket;
+    if (!socket) return;
 
     socket.on("newMessage", (newMessage) => {
-      const { selectedUser, unreadCount, setAllMessages, allMessages } = get();
-
-      const newAllMessages = [...allMessages, newMessage];
-      setAllMessages(newAllMessages);
-
-      if (newMessage.senderId !== selectedUser?._id) {
-        const existingCount = unreadCount.find(
-          (count) => count.userId === newMessage.senderId
+      const { authUser } = useAuthStore.getState();
+      const isSelectedConversation = sameId(
+        newMessage.senderId,
+        get().selectedUser?._id
+      );
+      set((state) => {
+        const alreadyExists = state.allMessages.some((message) =>
+          sameId(message._id, newMessage._id)
         );
-        if (existingCount) {
-          existingCount.count += 1;
-        } else {
-          unreadCount.push({ userId: newMessage.senderId, count: 1 });
+        const allMessages = alreadyExists
+          ? state.allMessages
+          : [...state.allMessages, newMessage];
+        if (!isSelectedConversation) {
+          if (alreadyExists) return state;
+          const count = state.unreadCount.find((item) =>
+            sameId(item.userId, newMessage.senderId)
+          );
+          return {
+            allMessages,
+            unreadCount: count
+              ? state.unreadCount.map((item) =>
+                  sameId(item.userId, newMessage.senderId)
+                    ? { ...item, count: item.count + 1 }
+                    : item
+                )
+              : [...state.unreadCount, { userId: String(newMessage.senderId), count: 1 }],
+          };
         }
+        return {
+          allMessages,
+          messages: state.messages.some((message) =>
+            sameId(message._id, newMessage._id)
+          )
+            ? state.messages
+            : [...state.messages, newMessage],
+        };
+      });
 
-        set({ unreadCount: [...unreadCount] });
-      } else {
+      if (isSelectedConversation && !sameId(newMessage.senderId, authUser?.data?._id)) {
         socket.emit("updateLastMessageIsRead", {
-          userId: selectedUser._id,
+          userId: authUser?.data?._id,
           messageId: newMessage._id,
         });
-        set({ messages: [...get().messages, newMessage] });
         const incomingSound = new Audio(IncomingSound);
-        incomingSound.play();
+        incomingSound.play().catch(() => {});
       }
     });
 
-    socket.on("updateRead", () => {
-      const { messages } = get();
+    socket.on("updateRead", ({ userId } = {}) => {
       const { authUser } = useAuthStore.getState();
-      const updatedMessages = messages.map((message) =>
-        message.senderId === authUser.data._id
-          ? { ...message, isRead: true }
-          : message
-      );
-      set({ messages: updatedMessages });
+      if (!userId || !authUser?.data?._id) return;
+      set((state) => {
+        const markRead = (message) =>
+          sameId(message.senderId, authUser.data._id) &&
+          sameId(message.receiverId, userId)
+            ? { ...message, isRead: true }
+            : message;
+        return {
+          messages: state.messages.map(markRead),
+          allMessages: state.allMessages.map(markRead),
+        };
+      });
     });
   },
 
   unSubscribeToMessages: () => {
     const socket = useAuthStore.getState().socket;
+    if (!socket) return;
     socket.off("newMessage");
     socket.off("updateRead");
   },
 
   setSelectedUser: (user) => {
-    set({ selectedUser: user });
+    set((state) => ({
+      selectedUser: user,
+      messages:
+        user && sameId(state.selectedUser?._id, user._id) ? state.messages : [],
+    }));
   },
 
   sendMessage: async (data) => {
-    const { selectedUser, messages, allMessages } = get();
+    const { selectedUser } = get();
+    if (!selectedUser?._id) {
+      toast.error("Select a connection before sending a message");
+      return null;
+    }
     try {
       const res = await axiosInstance.post(
         `/messages/send/${selectedUser._id}`,
         data
       );
-      set({ messages: [...messages, res.data.data] });
-      set({ allMessages: [...allMessages, res.data.data] });
+      const sentMessage = res.data.data;
+      set((state) => ({
+        messages: sameId(state.selectedUser?._id, selectedUser._id)
+          ? state.messages.some((message) => sameId(message._id, sentMessage._id))
+            ? state.messages
+            : [...state.messages, sentMessage]
+          : state.messages,
+        allMessages: state.allMessages.some((message) =>
+          sameId(message._id, sentMessage._id)
+        )
+          ? state.allMessages
+          : [...state.allMessages, sentMessage],
+      }));
+      return sentMessage;
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to send message");
+      return null;
     }
   },
 }));

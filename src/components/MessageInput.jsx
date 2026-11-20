@@ -15,25 +15,29 @@ const MessageInput = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    setSendMessageLoading(true);
     if (!text.trim() && !imagePreview) return;
+    if (!selectedUser && !selectedGroup) {
+      toast.error("Select a conversation before sending a message");
+      return;
+    }
+
+    setSendMessageLoading(true);
 
     try {
-      if (selectedUser) {
-        await sendMessage({
+      const result = selectedUser
+        ? await sendMessage({
+          text: text.trim(),
+          image: imagePreview,
+        })
+        : await sendGroupMessage({
           text: text.trim(),
           image: imagePreview,
         });
-      }
-      if (selectedGroup) {
-        await sendGroupMessage({
-          text: text.trim(),
-          image: imagePreview,
-        });
-      }
+      if (!result) return;
+
       const sentSound = new Audio(SentSound);
 
-      sentSound.play();
+      sentSound.play().catch(() => {});
 
       setText("");
       setImagePreview(null);
@@ -47,8 +51,10 @@ const MessageInput = () => {
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
+    if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
+      e.target.value = "";
       return;
     }
 

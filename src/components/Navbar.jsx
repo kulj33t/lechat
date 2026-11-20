@@ -12,7 +12,7 @@ import { useThemeStore } from "../store/useThemeStore";
 
 
 const Navbar = () => {
-  const { logout, authUser } = useAuthStore();
+  const { logout, authUser, socket } = useAuthStore();
   const [showLogoutMsg, setShowLogoutMsg] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const { theme, setTheme } = useThemeStore();
@@ -37,7 +37,12 @@ const Navbar = () => {
     return () => {
       if (authUser) unsubscribeToUserRequests();
     };
-  });
+  }, [
+    authUser,
+    socket,
+    subscribeToUserRequests,
+    unsubscribeToUserRequests,
+  ]);
 
   return (
     <>
@@ -49,9 +54,9 @@ const Navbar = () => {
               onClick={() => {
                 setSelectedUser(null);
                 setSelectedGroup(null);
-                setMessages(null);
+                setMessages([]);
                 setShowInfo(false);
-                setGroupMessages(null);
+                setGroupMessages([]);
               }}
             >
               <Link

@@ -2,8 +2,10 @@ import React, { useEffect } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { NoChatSelected, SideBar, ChatContainer } from "../components";
 import { useGroupChatStore } from "../store/useGroupChatStore";
+import { useAuthStore } from "../store/useAuthStore";
 
 const ChatPage = () => {
+  const { socket } = useAuthStore();
   const { selectedUser, subscribeToMessages, unSubscribeToMessages } =
     useChatStore();
   const {
@@ -25,6 +27,7 @@ const ChatPage = () => {
     subscribeToGroupMessages,
     unSubscribeToMessages,
     unSubscribeToGroupMessages,
+    socket,
   ]);
 
   return (

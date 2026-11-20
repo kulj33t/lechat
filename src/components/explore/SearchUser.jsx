@@ -3,6 +3,7 @@ import { useUserStore } from "../../store/useUserStore";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/useAuthStore";
 import { X } from "lucide-react";
+import { profileImageProps } from "../../lib/profileImage";
 
 const SearchUser = () => {
   const {
@@ -10,8 +11,6 @@ const SearchUser = () => {
     searchUser,
     reviewUserRequest,
     sendUserRequest,
-    exploreUsers,
-    setExploreUsers,
   } = useUserStore();
   const { authUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -23,16 +22,15 @@ const SearchUser = () => {
   const [requestSending, setRequestSending] = useState(false);
 
   const handleConnect = async (id) => {
-    const newExploreUsers = exploreUsers.filter((user) => user._id !== id);
-    setExploreUsers(newExploreUsers);
     setRequestSending(true);
     try {
-      await sendUserRequest(id);
+      const result = await sendUserRequest(id);
+      if (!result) return;
       toast.success("Request sent successfully");
       setUser([]);
       setUsername("");
     } catch (error) {
-      console.log(error);
+      toast.error(error?.response?.data?.message || "Unable to send request. Please try again.");
     } finally {
       setRequestSending(false);
     }
@@ -41,7 +39,8 @@ const SearchUser = () => {
   const handleAccept = async (reqId) => {
     setRequestAccepting(true);
     try {
-      await reviewUserRequest("accepted", reqId);
+      const reviewed = await reviewUserRequest("accepted", reqId);
+      if (!reviewed) return;
       toast.success("Request accepted successfully");
       setUser([]);
       setUsername("");
@@ -54,7 +53,8 @@ const SearchUser = () => {
   const handleReject = async (reqId) => {
     setRequestRejecting(true);
     try {
-      await reviewUserRequest("rejected", reqId);
+      const reviewed = await reviewUserRequest("rejected", reqId);
+      if (!reviewed) return;
       toast.success("Request rejected successfully");
       setUser([]);
       setUsername("");
@@ -93,6 +93,8 @@ const SearchUser = () => {
     if (!validateUsername()) {
       return;
     }
+    setUser(null);
+    setShowError(false);
     setLoading(true);
     try {
       const res = await searchUser(username.trim());
@@ -103,7 +105,8 @@ const SearchUser = () => {
         return;
       }
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Something went wrong");
+      toast.error("Unable to search right now. Please try again.");
+      setShowError(true);
     } finally {
       setLoading(false);
     }
@@ -154,10 +157,10 @@ const SearchUser = () => {
           </div>
         )}
 
-        {!loading && user && user.length !== 0 && (
+        {!loading && user?.data?.data && (
           <div className="mt-6 p-6 rounded-lg shadow-md w-full max-w-sm mx-auto flex flex-col items-center">
             <img
-              src={user.data.data.profilePic}
+              {...profileImageProps(user.data.data.profilePic)}
               alt={user.data.data.fullName}
               loading="lazy"
               className="w-24 h-24 rounded-full object-cover mb-4 border-2 border-primary"

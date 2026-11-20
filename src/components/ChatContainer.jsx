@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
 import { useGroupChatStore } from "../store/useGroupChatStore.js";
 import GroupInfo from "./GroupInfo.jsx";
+import { profileImageProps } from "../lib/profileImage";
 
 const ChatContainer = () => {
   const { authUser } = useAuthStore();
@@ -174,11 +175,11 @@ const ChatContainer = () => {
                 <div className="chat-image avatar">
                   <div className="size-10 rounded-full border">
                     <img
-                      src={
+                      {...profileImageProps(
                         message.senderId._id === authUser.data._id
                           ? authUser.data.profilePic
                           : message.senderId.profilePic
-                      }
+                      )}
                       loading="lazy"
                       alt="profile pic"
                     />
@@ -215,7 +216,7 @@ const ChatContainer = () => {
             ))}
         </div>
       )}
-      {showInfo && <GroupInfo />}
+      {showInfo && selectedGroup && <GroupInfo />}
       {!showInfo && <MessageInput />}
     </div>
   );

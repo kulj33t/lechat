@@ -3,6 +3,7 @@ import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
 import IncomingSound from "../assets/Incoming.mp3";
 import toast from "react-hot-toast";
+import { idOf, sameId } from "../lib/utils";
 
 export const useGroupChatStore = create((set, get) => ({
   groups: [],
@@ -29,37 +30,76 @@ export const useGroupChatStore = create((set, get) => ({
   getAllGroupMessages: async () => {
     try {
       const res = await axiosInstance.get("/group/messages/getAllMessages");
-      set({ allGroupMessages: res?.data?.data || [] });
+      get().setAllGroupMessages(res?.data?.data || []);
     } catch {
-      set({ allGroupMessages: [] });
+      get().setAllGroupMessages([]);
     }
   },
 
   setAllGroupMessages: (data) => {
-    set({ allGroupMessages: data });
+    set((state) => ({
+      allGroupMessages: data,
+      groupMessages: state.selectedGroup
+        ? data.filter((message) => sameId(message.groupId, state.selectedGroup._id))
+        : state.groupMessages,
+    }));
   },
 
   updateGroupReadCount: async (groupId) => {
     try {
       await axiosInstance.put("/group/messages/updateGroupUnread", { groupId });
+      const { authUser } = useAuthStore.getState();
+      set((state) => {
+        const markRead = (message) => {
+          if (
+            !sameId(message.groupId, groupId) ||
+            sameId(message.senderId, authUser?.data?._id)
+          ) {
+            return message;
+          }
+          const readBy = Array.isArray(message.isRead) ? message.isRead : [];
+          return {
+            ...message,
+            isRead: readBy.some((userId) => sameId(userId, authUser?.data?._id))
+              ? readBy
+              : [...readBy, authUser?.data?._id],
+          };
+        };
+        return {
+          allGroupMessages: state.allGroupMessages.map(markRead),
+          groupMessages: state.groupMessages.map(markRead),
+          unreadGroupCount: state.unreadGroupCount.filter(
+            (count) => !sameId(count.groupId, groupId)
+          ),
+        };
+      });
+      return true;
     } catch (error) {
       console.log(error);
+      return false;
     }
   },
 
   getUnreadGroupCount: async (groups) => {
     try {
       const unreadCounts = [];
-      if (groups.length === 0) return;
+      if (!Array.isArray(groups) || groups.length === 0) {
+        set({ unreadGroupCount: [] });
+        return;
+      }
       const { allGroupMessages } = get();
       const { authUser } = useAuthStore.getState();
+      if (!authUser?.data?._id) {
+        set({ unreadGroupCount: [] });
+        return;
+      }
 
       groups.forEach((group) => {
         const count = allGroupMessages.filter(
           (message) =>
-            message.groupId === group._id &&
-            message.senderId._id !== authUser.data._id &&
-            !message.isRead.includes(authUser.data._id)
+            sameId(message.groupId, group._id) &&
+            !sameId(message.senderId, authUser.data._id) &&
+            !message.isRead?.some((userId) => sameId(userId, authUser.data._id))
         ).length;
 
         if (count > 0) {
@@ -75,20 +115,29 @@ export const useGroupChatStore = create((set, get) => ({
 
   setUnreadGroupCount: (data) => set({ unreadGroupCount: data }),
 
-  setGroupMessages: (data) => set({ groupMessages: data }),
+  setGroupMessages: (data) =>
+    set({ groupMessages: Array.isArray(data) ? data : [] }),
 
-  setSelectedGroup: (group) => set({ selectedGroup: group }),
+  setSelectedGroup: (group) =>
+    set((state) => {
+      const sameGroup = group && sameId(state.selectedGroup?._id, group._id);
+      return {
+        selectedGroup: group,
+        groupMessages: sameGroup ? state.groupMessages : [],
+        showInfo: sameGroup ? state.showInfo : false,
+      };
+    }),
 
   setShowInfo: (data) => set({ showInfo: data }),
 
-  setGroups: (data) => set({ groups: data }),
+  setGroups: (data) => set({ groups: Array.isArray(data) ? data : [] }),
 
   getGroupMessages: async (groupId) => {
     set({ isGroupMessagesLoading: true });
     try {
       const { allGroupMessages } = get();
-      const messages = allGroupMessages.filter(
-        (message) => message.groupId === groupId
+      const messages = allGroupMessages.filter((message) =>
+        sameId(message.groupId, groupId)
       );
       set({ groupMessages: messages });
     } catch {
@@ -99,152 +148,189 @@ export const useGroupChatStore = create((set, get) => ({
   },
 
   sendGroupMessage: async (data) => {
+    const { selectedGroup } = get();
+    if (!selectedGroup?._id) {
+      toast.error("Select a group before sending a message");
+      return null;
+    }
     try {
-      const { selectedGroup, groupMessages, allGroupMessages } = get();
       const res = await axiosInstance.post(
         `/group/messages/send/${selectedGroup._id}`,
         data
       );
 
       const newMessage = res.data.data;
-      set({
-        groupMessages: groupMessages.some((msg) => msg._id === newMessage._id)
-          ? groupMessages
-          : [...groupMessages, newMessage],
-        allGroupMessages: allGroupMessages.some(
-          (msg) => msg._id === newMessage._id
+      set((state) => ({
+        groupMessages: sameId(state.selectedGroup?._id, selectedGroup._id)
+          ? state.groupMessages.some((message) => sameId(message._id, newMessage._id))
+            ? state.groupMessages
+            : [...state.groupMessages, newMessage]
+          : state.groupMessages,
+        allGroupMessages: state.allGroupMessages.some((message) =>
+          sameId(message._id, newMessage._id)
         )
-          ? allGroupMessages
-          : [...allGroupMessages, newMessage],
-      });
+          ? state.allGroupMessages
+          : [...state.allGroupMessages, newMessage],
+      }));
+      return newMessage;
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to send message");
+      return null;
     }
   },
 
   subscribeToGroupMessages: () => {
     const { authUser } = useAuthStore.getState();
     const socket = useAuthStore.getState().socket;
+    if (!socket) return;
 
     socket.on("newGroupMessage", (newGroupMessage) => {
-      const {
-        unreadGroupCount,
-        selectedGroup,
-        groupMessages,
-        allGroupMessages,
-        setAllGroupMessages,
-      } = get();
+      const messageGroupId = idOf(newGroupMessage.groupId);
+      const isSelectedGroup = sameId(get().selectedGroup?._id, messageGroupId);
+      const isOwnMessage = sameId(newGroupMessage.senderId, authUser?.data?._id);
 
-      const newAllGroupMessages = [...allGroupMessages, newGroupMessage];
-      setAllGroupMessages(newAllGroupMessages);
-
-      if (newGroupMessage.groupId !== selectedGroup?._id) {
-        const existingCount = unreadGroupCount.find(
-          (count) => count.groupId === newGroupMessage.groupId
+      set((state) => {
+        const alreadyExists = state.allGroupMessages.some((message) =>
+          sameId(message._id, newGroupMessage._id)
         );
+        const allGroupMessages = alreadyExists
+          ? state.allGroupMessages
+          : [...state.allGroupMessages, newGroupMessage];
 
-        if (existingCount) {
-          existingCount.count += 1;
-        } else {
-          unreadGroupCount.push({ groupId: newGroupMessage.groupId, count: 1 });
+        if (isSelectedGroup) {
+          return {
+            allGroupMessages,
+            groupMessages: state.groupMessages.some((message) =>
+              sameId(message._id, newGroupMessage._id)
+            )
+              ? state.groupMessages
+              : [...state.groupMessages, newGroupMessage],
+          };
         }
+        if (alreadyExists) return state;
+        if (isOwnMessage) return { allGroupMessages };
 
-        set({ unreadGroupCount: [...unreadGroupCount] });
-      } else {
-        if (newGroupMessage.senderId._id !== authUser.data._id) {
+        const existingCount = state.unreadGroupCount.find((count) =>
+          sameId(count.groupId, messageGroupId)
+        );
+        return {
+          allGroupMessages,
+          unreadGroupCount: existingCount
+            ? state.unreadGroupCount.map((count) =>
+                sameId(count.groupId, messageGroupId)
+                  ? { ...count, count: count.count + 1 }
+                  : count
+              )
+            : [...state.unreadGroupCount, { groupId: messageGroupId, count: 1 }],
+        };
+      });
+
+      if (isSelectedGroup) {
+        if (!isOwnMessage) {
           socket.emit("updateLastGroupMessageIsRead", {
             userId: authUser.data._id,
             messageId: newGroupMessage._id,
           });
         }
-
-        set({ groupMessages: [...groupMessages, newGroupMessage] });
-
-        if (newGroupMessage.senderId._id !== authUser.data._id) {
+        if (!isOwnMessage) {
           const incomingSound = new Audio(IncomingSound);
-          incomingSound.play();
+          incomingSound.play().catch(() => {});
         }
       }
     });
 
     socket.on("removedGroup", (groupId) => {
-      const { groups } = get();
-      set({
-        groups: groups.filter((group) => group._id !== groupId),
-        selectedGroup: null,
-        showInfo: false,
-      });
+      set((state) => ({
+        groups: state.groups.filter((group) => !sameId(group._id, groupId)),
+        allGroupMessages: state.allGroupMessages.filter(
+          (message) => !sameId(message.groupId, groupId)
+        ),
+        unreadGroupCount: state.unreadGroupCount.filter(
+          (count) => !sameId(count.groupId, groupId)
+        ),
+        selectedGroup: sameId(state.selectedGroup?._id, groupId)
+          ? null
+          : state.selectedGroup,
+        groupMessages: sameId(state.selectedGroup?._id, groupId)
+          ? []
+          : state.groupMessages,
+        showInfo: sameId(state.selectedGroup?._id, groupId)
+          ? false
+          : state.showInfo,
+      }));
     });
 
     socket.on("newGroup", (group) => {
-      const { groups } = get();
-      if (!groups.some((g) => g._id === group._id)) {
-        set({ groups: [...groups, group] });
-      }
+      set((state) =>
+        state.groups.some((item) => sameId(item._id, group._id))
+          ? state
+          : { groups: [...state.groups, group] }
+      );
     });
 
     socket.on("newMember", ({ groupId, user }) => {
-      const { groups, selectedGroup, setSelectedGroup } = get();
-
-      if (selectedGroup) {
-        const memberExists = selectedGroup.members.some(
-          (member) => member._id === user._id
-        );
-        const updatedMembers = memberExists
-          ? selectedGroup.members
-          : [...selectedGroup.members, user];
-        setSelectedGroup({ ...selectedGroup, members: updatedMembers });
-      }
-
-      set({
-        groups: groups.map((group) =>
-          group._id === groupId
+      set((state) => ({
+        selectedGroup: sameId(state.selectedGroup?._id, groupId)
+          ? {
+              ...state.selectedGroup,
+              members: (state.selectedGroup.members || []).some((member) =>
+                sameId(member._id, user._id)
+              )
+                ? state.selectedGroup.members
+                : [...(state.selectedGroup.members || []), user],
+            }
+          : state.selectedGroup,
+        groups: state.groups.map((group) =>
+          sameId(group._id, groupId)
             ? {
                 ...group,
-                members: group.members.some((member) => member._id === user._id)
+                members: (group.members || []).some((member) => sameId(member._id, user._id))
                   ? group.members
-                  : [...group.members, user],
+                  : [...(group.members || []), user],
               }
             : group
         ),
-      });
+      }));
     });
 
     socket.on("updatedMembers", ({ groupId, userId }) => {
-      const { groups, selectedGroup, setSelectedGroup } = get();
-      if (selectedGroup) {
-        const updatedMembers = selectedGroup.members.filter(
-          (member) => member._id !== userId
-        );
-        setSelectedGroup({ ...selectedGroup, members: updatedMembers });
-      }
-      set({
-        groups: groups.map((group) =>
-          group._id === groupId
+      set((state) => ({
+        selectedGroup: sameId(state.selectedGroup?._id, groupId)
+          ? {
+              ...state.selectedGroup,
+              members: (state.selectedGroup.members || []).filter(
+                (member) => !sameId(member._id, userId)
+              ),
+            }
+          : state.selectedGroup,
+        groups: state.groups.map((group) =>
+          sameId(group._id, groupId)
             ? {
                 ...group,
-                members: group.members.filter(
-                  (member) => member._id !== userId
+                members: (group.members || []).filter(
+                  (member) => !sameId(member._id, userId)
                 ),
               }
             : group
         ),
-      });
+      }));
     });
 
     socket.on("updatedGroupData", ({ groupId, group }) => {
-      const { groups, selectedGroup, setSelectedGroup } = get();
-      if (selectedGroup) {
-        setSelectedGroup(group);
-      }
-      set({
-        groups: groups.map((g) => (g._id === groupId ? { ...g, ...group } : g)),
-      });
+      set((state) => ({
+        selectedGroup: sameId(state.selectedGroup?._id, groupId)
+          ? { ...state.selectedGroup, ...group }
+          : state.selectedGroup,
+        groups: state.groups.map((item) =>
+          sameId(item._id, groupId) ? { ...item, ...group } : item
+        ),
+      }));
     });
   },
 
   unSubscribeToGroupMessages: () => {
     const socket = useAuthStore.getState().socket;
+    if (!socket) return;
     socket.off("newGroupMessage");
     socket.off("removedGroup");
     socket.off("newGroup");
