@@ -40,9 +40,6 @@ const SignUpPage = () => {
   // Email validation state (only regex)
   const [isEmailValid, setIsEmailValid] = useState(false);
 
-  // Password validation state
-  const [isPasswordValid, setIsPasswordValid] = useState(false);
-
   // Form data
   const [formData, setFormData] = useState({
     fullName: "",
@@ -74,12 +71,6 @@ const SignUpPage = () => {
     setIsEmailValid(emailRegex.test(email));
   };
 
-  // Password validation (strong password regex)
-  const validatePassword = (password) => {
-    const isStrong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()\-_=+{};:,<.>]).{8,}$/.test(password);
-    setIsPasswordValid(isStrong);
-  };
-
   // Handlers for input changes
   const handleUserNameChange = (username) => {
     setFormData((prev) => ({ ...prev, username }));
@@ -93,7 +84,6 @@ const SignUpPage = () => {
 
   const handlePasswordChange = (password) => {
     setFormData((prev) => ({ ...prev, password }));
-    validatePassword(password);
   };
 
   // Submit handler
@@ -105,10 +95,9 @@ const SignUpPage = () => {
     if (!formData.username) return toast.error("Username is required");
     if (!isUsernameValid) return toast.error("Username is not available or invalid");
     if (!formData.password) return toast.error("Password is required");
-    if (!isPasswordValid)
-      return toast.error(
-        "Password must be 8+ chars and include uppercase, lowercase, number & symbol."
-      );
+    if (formData.password.length < 8) {
+      return toast.error("Password must be at least 8 characters.");
+    }
 
     signup(formData);
   };
@@ -118,7 +107,7 @@ const SignUpPage = () => {
     formData.fullName.trim() &&
     isUsernameValid &&
     isEmailValid &&
-    isPasswordValid;
+    formData.password.length >= 8;
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 mt-16">
@@ -233,11 +222,7 @@ const SignUpPage = () => {
                   </div>
                   <input
                     type={showPass ? "text" : "password"}
-                    className={`input w-full pl-10 ${
-                      !isPasswordValid && formData.password
-                        ? "border border-error"
-                        : "input-bordered"
-                    }`}
+                    className="input input-bordered w-full pl-10"
                     placeholder="********"
                     value={formData.password}
                     onChange={(e) => handlePasswordChange(e.target.value)}
@@ -254,10 +239,9 @@ const SignUpPage = () => {
                     )}
                   </button>
                 </div>
-                {!isPasswordValid && formData.password && (
+                {formData.password && formData.password.length < 8 && (
                   <p className="text-xs text-error mt-1">
-                    Password must be 8+ chars and include uppercase, lowercase,
-                    number & symbol.
+                    Password must be at least 8 characters.
                   </p>
                 )}
               </div>

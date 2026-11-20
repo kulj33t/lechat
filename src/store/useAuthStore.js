@@ -5,10 +5,21 @@ import { io } from "socket.io-client";
 
 const BASE_URL = "https://lechat-backend.onrender.com";
 
+const getUserFacingError = (error, fallback) => {
+  const status = error?.response?.status;
+  if (!status || status === 401 || status >= 500) return fallback;
+  const message = error.response.data?.message;
+  if (!message || /\b(cors|origin|network|internal server|exception)\b/i.test(message)) {
+    return fallback;
+  }
+  return message;
+};
+
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
   isCheckingAuth: true,
+  authCheckError: null,
   isSigningUp: false,
   isLoggingIn: false,
   isUpdatingPassword: false,
@@ -18,12 +29,20 @@ export const useAuthStore = create((set, get) => ({
   socket: null,
 
   checkAuth: async () => {
+    set({ isCheckingAuth: true, authCheckError: null });
     try {
       const response = await axiosInstance.get("/auth/check");
       set({ authUser: response.data });
       get().connectSocket();
     } catch (error) {
-      set({ authUser: null });
+      const status = error?.response?.status;
+      if (status === 401 || status === 404) {
+        set({ authUser: null, authCheckError: null });
+      } else {
+        set({
+          authCheckError: "Unable to verify your session. Check your connection and try again.",
+        });
+      }
     } finally {
       set({ isCheckingAuth: false });
     }
@@ -32,12 +51,15 @@ export const useAuthStore = create((set, get) => ({
   signup: async (data) => {
     set({ isSigningUp: true });
     try {
-      const res = await axiosInstance.post("/auth/signup", data);
-      set({ authUser: res.data });
+      await axiosInstance.post("/auth/signup", data);
+      const session = await axiosInstance.get("/auth/check");
+      set({ authUser: session.data });
       toast.success("Account created successfully");
       get().connectSocket();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(
+        getUserFacingError(error, "Unable to create your account right now. Please try again.")
+      );
     } finally {
       set({ isSigningUp: false });
     }
@@ -46,12 +68,15 @@ export const useAuthStore = create((set, get) => ({
   login: async (data) => {
     set({ isLoggingIn: true });
     try {
-      const res = await axiosInstance.post("/auth/login", data);
-      set({ authUser: res.data });
+      await axiosInstance.post("/auth/login", data);
+      const session = await axiosInstance.get("/auth/check");
+      set({ authUser: session.data });
       toast.success("Logged in successfully");
       get().connectSocket();
     } catch (error) {
-      toast.error(error?.response?.data?.message);
+      toast.error(
+        getUserFacingError(error, "Unable to log in right now. Please try again.")
+      );
     } finally {
       set({ isLoggingIn: false });
     }
@@ -64,7 +89,9 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Logged out successfully");
       get().disconnectSocket();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(
+        getUserFacingError(error, "Unable to log out right now. Please try again.")
+      );
     }
   },
 
@@ -75,7 +102,9 @@ export const useAuthStore = create((set, get) => ({
       set({ authUser: res.data });
       toast.success("Profile updated successfully");
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(
+        getUserFacingError(error, "Unable to update your profile right now. Please try again.")
+      );
     } finally {
       set({ isUpdatingProfile: false });
     }
@@ -87,8 +116,12 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.patch("/auth/update-password", data);
       toast.success("Password updated successfully");
       set({ authUser: res.data });
+      return res;
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(
+        getUserFacingError(error, "Unable to update your password right now. Please try again.")
+      );
+      return null;
     } finally {
       set({ isUpdatingPassword: false });
     }
@@ -102,7 +135,9 @@ export const useAuthStore = create((set, get) => ({
       });
       toast.success("Verification mail sent");
     } catch (error) {
-      toast.error(error?.response?.data?.message);
+      toast.error(
+        getUserFacingError(error, "Unable to send the email right now. Please try again.")
+      );
     } finally {
       set({ isSendingMail: false });
     }
@@ -118,8 +153,10 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Password updated");
       return res;
     } catch (error) {
-      toast.error(error.response.data.message);
-      return error.response.data;
+      toast.error(
+        getUserFacingError(error, "Unable to reset your password right now. Please try again.")
+      );
+      return error?.response || null;
     }
   },
 
@@ -128,7 +165,9 @@ export const useAuthStore = create((set, get) => ({
       await axiosInstance.put("/auth/updatePrivacy", { privacy});
       toast.success("Privacy updated successfully");
     } catch (error) {
-      toast.error(error?.response?.data?.message);
+      toast.error(
+        getUserFacingError(error, "Unable to update your privacy setting right now. Please try again.")
+      );
     }
   },
 

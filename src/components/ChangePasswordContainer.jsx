@@ -18,6 +18,14 @@ const ChangePasswordContainer = () => {
   });
 
   const handlePasswordChange = async () => {
+    if (!formData.currPass || !formData.newPass) {
+      toast.error("Enter your current and new password.");
+      return;
+    }
+    if (formData.newPass.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
     if (formData.newPass !== formData.confirmPass) {
       toast.error("Passwords do not match.");
       return;
@@ -26,8 +34,7 @@ const ChangePasswordContainer = () => {
       currPass: formData.currPass,
       newPass: formData.newPass,
     });
-    console.log("Password", res);
-    if (res.status === 200) {
+    if (res?.status === 200) {
       setShowContainer(false);
       setFormData({
         currPass: "",

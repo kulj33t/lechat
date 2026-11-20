@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader, Lock, MessageSquare, X } from "lucide-react";
 import AuthImagePattern from "../components/AuthImagePattern";
 import { useAuthStore } from "../store/useAuthStore";
@@ -31,17 +31,23 @@ const ResetVerification = () => {
       toast.error("Passwords do not match.");
       return;
     }
-    const decodedEmail = decodeURIComponent(email);
-    const decodedToken = decodeURIComponent(token);
+    if (!newPass) {
+      toast.error("Password is required.");
+      return;
+    }
+    if (newPass.length < 8) {
+      toast.error("Password must be at least 8 characters.");
+      return;
+    }
+
     setIsVerifying(true);
     const response = await verifyAndReset(email, token, newPass);
-    console.log(response);
     setIsVerifying(false);
     if (response?.status === 200) {
       setTimeout(() => {
         navigate("/login");
       }, 2000);
-    } else {
+    } else if (response?.status === 400 || response?.status === 404) {
       setShowResendMail(true);
     }
   };

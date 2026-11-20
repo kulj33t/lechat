@@ -20,7 +20,7 @@ import { useThemeStore } from "./store/useThemeStore";
 import { useUserStore } from "./store/useUserStore";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth } = useAuthStore();
+  const { authUser, checkAuth, isCheckingAuth, authCheckError } = useAuthStore();
   const {
     getUserRequests,
     getGroupRequestsUser,
@@ -40,6 +40,17 @@ const App = () => {
   }, [authUser, getUserRequests, getGroupRequestsUser]);
 
   const { theme } = useThemeStore();
+
+  if (authCheckError) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+        <p role="alert">{authCheckError}</p>
+        <button className="btn btn-primary" onClick={checkAuth}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (
     (isCheckingAuth && !authUser) ||
